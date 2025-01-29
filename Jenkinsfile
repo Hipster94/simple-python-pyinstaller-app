@@ -1,44 +1,21 @@
 pipeline {
     agent any
-
     stages {
         stage('Build') {
-            checkout scm
-
-            // Use withDockerContainer to specify the Python container with a custom entrypoint
-            withDockerContainer(image: 'python:2-alpine', args: '--entrypoint=""') {
+            steps {
                 sh 'python -m py_compile sources/add2vals.py sources/calc.py'
+                stash(name: 'compiled-results', includes: 'sources/*.py*')
             }
         }
-
-        stage('Test') {
-            checkout scm
-
-            // Use withDockerContainer to specify the pytest container with a custom entrypoint
-            withDockerContainer(image: 'qnib/pytest', args: '--entrypoint=""') {
-                sh 'py.test --junit-xml test-reports/results.xml sources/test_calc.py'
-                junit 'test-reports/results.xml'
+        stage('Test') { 
+            steps {
+                sh 'py.test --junit-xml test-reports/results.xml sources/test_calc.py' 
             }
-        }
-
-        stage('Manual Approval') {
-            checkout scm
-
-            // Waiting for user input for approval
-            input message: 'Lanjutkan ke tahap Deploy?', ok: 'Lanjutkan'
-        }
-
-        stage('Deploy') {
-            checkout scm
-
-            // Use withDockerContainer to specify the pyinstaller container with a custom entrypoint
-            withDockerContainer(image: 'cdrx/pyinstaller-linux:python2', args: '--entrypoint=""') {
-                sh 'pyinstaller --onefile sources/add2vals.py'
-                archiveArtifacts artifacts: 'dist/add2vals', allowEmptyArchive: true
+            post {
+                always {
+                    junit 'test-reports/results.xml' 
+                }
             }
-
-            echo 'Sleep for 1 min'
-            sleep time: 60, unit: 'SECONDS'
         }
     }
 }
