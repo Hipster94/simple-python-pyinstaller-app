@@ -1,73 +1,73 @@
-pipeline {
-    agent {
-        docker {
-            image 'python:3-alpine'
-            args '--entrypoint="" -w /workspace'
+node {
+
+    stage('Build') {
+
+        checkout scm
+
+        // Use withDockerContainer to specify the Python container with a custom entrypoint
+
+        withDockerContainer(image: 'python:2-alpine', args: '--entrypoint=""') {
+
+            sh 'python -m py_compile sources/add2vals.py sources/calc.py'
+
         }
+
     }
-    environment {
-        DEPLOY_SERVER = "localhost:4000"
-        DEPLOY_PATH = "/opt/app"
+
+}
+
+node {
+
+    stage('Test') {
+
+        checkout scm
+
+        // Use withDockerContainer to specify the pytest container with a custom entrypoint
+
+        withDockerContainer(image: 'qnib/pytest', args: '--entrypoint=""') {
+
+            sh 'py.test --junit-xml test-reports/results.xml sources/test_calc.py'
+
+            junit 'test-reports/results.xml'
+
+        }
+
     }
-    stages {
-        stage('Git Clone') { 
-            steps {
-                sh 'apk add --no-cache git'  // Ensure git is available
-                git branch: 'master', url: 'https://github.com/jenkins-docs/simple-python-pyinstaller-app'
-            }
+
+}
+
+stage('Manual Approval')  {         
+
+            checkout scm         
+
+            // Menunggu input persetujuan dari pengguna         
+
+            input message: 'Lanjutkan ke tahap Deploy?', ok: 'Lanjutkan'     
+
+}
+
+}
+
+node {
+
+    stage('Deploy') {
+
+        checkout scm
+
+        // Use withDockerContainer to specify the pyinstaller container with a custom entrypoint
+
+        withDockerContainer(image: 'cdrx/pyinstaller-linux:python2', args: '--entrypoint=""') {
+
+            sh 'pyinstaller --onefile sources/add2vals.py'
+
+            archiveArtifacts artifacts: 'dist/add2vals', allowEmptyArchive: true
+
         }
-        stage('Build') {
-            steps {
-                sh 'python -m py_compile sources/add2vals.py sources/calc.py'
-            }
-        }
-        stage('Test') {
-            agent {
-                docker {
-                    image 'python:3-alpine'
-                    args '--entrypoint="" -w /workspace'
-                }
-            }
-            steps {
-                sh 'apk add --no-cache py3-pip'
-                sh 'pip install pytest'
-                sh 'pytest --verbose --junit-xml test-reports/results.xml sources/test_calc.py'
-            }
-            post {
-                always {
-                    junit 'test-reports/results.xml'
-                }
-            }
-        }
-        stage('Deliver') {
-            agent {
-                docker {
-                    image 'python:3-alpine'
-                    args '--entrypoint="" -w /workspace'
-                }
-            }
-            steps {
-                sh 'apk add --no-cache py3-pip'
-                sh 'pip install pyinstaller'
-                sh 'pyinstaller --onefile sources/add2vals.py'
-            }
-            post {
-                success {
-                    archiveArtifacts 'dist/add2vals'
-                }
-            }
-        }
-        stage('Deploy') {
-            agent {
-                docker {
-                    image 'python:3-alpine'
-                    args '--entrypoint="" -w /workspace'
-                }
-            }
-            steps {
-                sh 'apk add --no-cache openssh-client'
-                sh 'scp -o StrictHostKeyChecking=no dist/add2vals $DEPLOY_SERVER:$DEPLOY_PATH'
-            }
-        }
+
+        echo 'Sleep for 1 min'
+
+        sleep time: 60, unit: 'SECONDS'
+
     }
+
 }
