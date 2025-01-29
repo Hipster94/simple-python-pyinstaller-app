@@ -46,7 +46,6 @@ stage('Manual Approval')  {
 
 }
 
-}
 
 node {
 
